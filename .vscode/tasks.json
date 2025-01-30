@@ -1,0 +1,47 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Clean",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "clean"
+            ],
+            "group": {
+            "kind": "build",
+            "isDefault": true
+            },
+            "problemMatcher": ["$gcc"],
+            "detail": "Limpa os artefatos"
+        },
+        {
+            "label": "Build (debug)",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "debug"
+            ],
+            "group": {
+            "kind": "build",
+            "isDefault": true
+            },
+            "problemMatcher": ["$gcc"],
+            "detail": "Compila o programa em modo debug"
+        },
+        {
+            "label": "Build (release)",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "debug"
+            ],
+            "group": {
+            "kind": "build",
+            "isDefault": true
+            },
+            "problemMatcher": ["$gcc"],
+            "detail": "Compila o programa em modo release"
+        }
+    ]
+}
