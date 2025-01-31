@@ -1,5 +1,5 @@
-#ifndef REQUEST_H
-#define REQUEST_H
+#ifndef HTTP_H
+#define HTTP_H
 
 #include <string.h>
 #include <uv.h>
@@ -21,18 +21,16 @@ typedef struct
     size_t total_read;     // Total de bytes lidos do corpo
     size_t content_length; // Tamanho esperado do conteúdo
     char *request_data;    // Buffer para armazenar os dados
-
+    int (*json)(const char *req, uv_stream_t *client);
 } http_request;
 
 http_request *http_request_create(uv_stream_t *client);
 
-void http_parse_headers(http_request *req, const char *data);
-
-void http_request_append_body(http_request *req, const char *data, size_t len);
-
 char *http_json_response(const char *json_body);
 
-int http_respond(const char *response, uv_stream_t *client, const uv_buf_t *buf, uv_write_cb cb);
+int http_send(const char *res, uv_stream_t *client);
+
+int http_send_json(const char *res, uv_stream_t *client);
 
 void http_request_free(http_request *req);
 

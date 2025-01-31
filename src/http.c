@@ -22,18 +22,9 @@ http_request *http_request_create(uv_stream_t *client)
     req->content_length = 0;
     req->request_data = NULL;
     req->header_parsed = 0;
+    req->json = http_send_json;
 
     return req;
-}
-
-void http_parse_headers(http_request *req, const char *data)
-{
-    _debug("http_parse_headers");
-}
-
-void http_request_append_body(http_request *req, const char *data, size_t len)
-{
-    _debug("http_request_append_body");
 }
 
 char *http_json_response(const char *json_body)
@@ -67,26 +58,39 @@ char *http_json_response(const char *json_body)
     return response;
 }
 
-int http_respond(const char *response, uv_stream_t *client, const uv_buf_t *buf, uv_write_cb cb)
+static void on_write(uv_write_t *req, int status)
 {
-    uv_write_t *w_req = malloc(sizeof(uv_write_t));
-
-    // Falha ao alocar memória para resposta
-    if (!w_req)
+    if (status < 0)
     {
-        return -100;
+        _err("Erro ao escrever: %s", uv_strerror(status));
+        uv_close((uv_handle_t *)req->handle, NULL);
     }
 
-    uv_buf_t res_buf = uv_buf_init((char *)response, strlen(response));
-    uv_write(w_req, client, &res_buf, 1, cb);
+    free(req);
+}
+
+int http_send(const char *res, uv_stream_t *client)
+{
+    uv_write_t *r = malloc(sizeof(uv_write_t));
+    uv_buf_t buf = uv_buf_init((char *)res, strlen(res));
+    uv_write(r, client, &buf, 1, on_write);
 
     return 0;
+}
+
+int http_send_json(const char *res, uv_stream_t *client)
+{
+    const char *r = http_json_response(res);
+
+    return http_send(r, client);
 }
 
 void http_request_free(http_request *req)
 {
     if (!req)
+    {
         return;
+    }
 
     if (req->headers)
     {
