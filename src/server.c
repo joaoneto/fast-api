@@ -44,25 +44,15 @@ static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
             if (header_end)
             {
                 size_t header_len = (header_end - buf->base) + 4;
+                char *headers_str = strndup(buf->base, header_len);
 
-                char *content_length_str = strstr(buf->base, "Content-Length: ");
-                if (content_length_str)
-                {
-                    content_length_str += strlen("Content-Length: ");
-                    conn->req->content_length = strtol(content_length_str, NULL, 10);
-                }
+                char *first_line = strtok(headers_str, "\r\n");
+                char *first_line_copy = strdup(first_line);
+                http_parse_request_line(conn->req, first_line_copy);
+                free(first_line_copy);
+                http_parse_headers(conn->req, headers_str + strlen(first_line) + 2);
 
-                conn->req->headers = malloc(header_len + 1);
-                if (!conn->req->headers)
-                {
-                    _err("Falha ao alocar memória para headers");
-                    http_request_free(conn->req);
-                    free(buf->base);
-                    return;
-                }
-
-                memcpy(conn->req->headers, buf->base, header_len);
-                conn->req->headers[nread] = '\0';
+                free(headers_str);
                 conn->req->header_parsed = 1;
             }
         }

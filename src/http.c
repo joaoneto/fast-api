@@ -4,6 +4,18 @@
 #include "applog.h"
 #include "http.h"
 
+char *http_get_header(http_request *req, const char *key)
+{
+    for (size_t i = 0; i < req->header_count; i++)
+    {
+        if (strcasecmp(req->headers[i].key, key) == 0)
+        {
+            return req->headers[i].value;
+        }
+    }
+    return NULL;
+}
+
 http_request *http_request_create(uv_stream_t *client)
 {
     http_request *req = (http_request *)malloc(sizeof(http_request));
@@ -79,6 +91,36 @@ int http_send_json(const char *res, uv_stream_t *client)
     const char *r = http_json_response(res);
 
     return http_send(r, client);
+}
+
+void http_parse_request_line(http_request *req, char *line)
+{
+    char *saveptr;
+    req->method = strdup(strtok_r(line, " ", &saveptr));
+    req->path = strdup(strtok_r(NULL, " ", &saveptr));
+    req->version = strdup(strtok_r(NULL, "\r\n", &saveptr));
+}
+
+void http_parse_headers(http_request *req, char *headers)
+{
+    char *line = strtok(headers, "\r\n");
+    req->header_count = 0;
+
+    while (line)
+    {
+        char *sep = strchr(line, ':');
+        if (sep)
+        {
+            *sep = '\0';
+            char *key = line;
+            char *value = sep + 2;
+            req->headers = realloc(req->headers, (req->header_count + 1) * sizeof(http_header));
+            req->headers[req->header_count].key = strdup(key);
+            req->headers[req->header_count].value = strdup(value);
+            req->header_count++;
+        }
+        line = strtok(NULL, "\r\n");
+    }
 }
 
 void http_request_free(http_request *req)

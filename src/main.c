@@ -12,9 +12,18 @@
 
 void on_request(http_request *req, uv_stream_t *client)
 {
-    _debug("Headers: %s", req->headers);
+    _debug("Headers Content_Type: %s", http_get_header(req, "Content-type"));
+    _debug("Headers User-Agent: %s", http_get_header(req, "user-agent"));
+    _debug("Headers Host: %s", http_get_header(req, "HosT"));
+
+    _debug("REQ Method: %s", req->method);
+    _debug("REQ Path: %s", req->path);
+    _debug("REQ Version: %s", req->version);
+
+    _debug("Headers count: %zu", req->header_count);
     _debug("Content length: %d", req->content_length);
     _debug("Total Read: %zu", req->total_read);
+
     if (req->total_read >= req->content_length)
     {
         _info("Corpo da requisição completamente lido");
