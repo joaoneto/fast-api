@@ -13,14 +13,10 @@ http_request *http_request_create(uv_stream_t *client)
         return NULL;
     }
 
-    memset(req, 0, sizeof(http_request));
-
-    req->client = client;
     req->headers = NULL;
     req->body = NULL;
     req->total_read = 0;
     req->content_length = 0;
-    req->request_data = NULL;
     req->header_parsed = 0;
     req->json = http_send_json;
 

@@ -12,8 +12,13 @@ typedef struct
     uv_tcp_t socket;
     uv_loop_t *loop;
     server_cb cb;
-    http_request *req;
 } server;
+
+typedef struct
+{
+    server *srv;
+    http_request *req;
+} server_conn;
 
 int server_listen(server *srv, const char *ip, int port);
 

@@ -20,7 +20,6 @@ typedef struct
     int header_parsed;     // Flag para indicar se o header já foi processado
     size_t total_read;     // Total de bytes lidos do corpo
     size_t content_length; // Tamanho esperado do conteúdo
-    char *request_data;    // Buffer para armazenar os dados
     int (*json)(const char *req, uv_stream_t *client);
 } http_request;
 

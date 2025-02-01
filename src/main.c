@@ -12,15 +12,17 @@
 
 void on_request(http_request *req, uv_stream_t *client)
 {
+    _debug("Headers: %s", req->headers);
+    _debug("Content length: %d", req->content_length);
+    _debug("Total Read: %zu", req->total_read);
     if (req->total_read >= req->content_length)
     {
         _info("Corpo da requisição completamente lido");
 
         req->json("{ \"message\": \"Hello world!\" }", client);
 
-        free(req->headers);
-        req->headers = NULL;
-
+        // @todo Fazer req->end
+        http_request_free(req);
         uv_read_stop(client);
     }
 }

@@ -8,7 +8,7 @@
 
 #define DEFAULT_BACKLOG 128
 
-void alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
+static void alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
 {
     buf->base = malloc(suggested_size);
     if (!buf->base)
@@ -24,58 +24,65 @@ void alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
 
 static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
 {
-    server *srv = (server *)client->data;
+    server_conn *conn = (server_conn *)client->data;
 
-    if (!srv->req)
+    if (!conn->req)
     {
         _err("Erro: http_request não inicializado");
         if (buf->base)
+        {
             free(buf->base);
+        }
         return;
     }
 
     if (nread > 0)
     {
-        if (!srv->req->header_parsed)
+        if (!conn->req->header_parsed)
         {
             char *header_end = strstr(buf->base, "\r\n\r\n");
             if (header_end)
             {
+                size_t header_len = (header_end - buf->base) + 4;
+
                 char *content_length_str = strstr(buf->base, "Content-Length: ");
                 if (content_length_str)
                 {
                     content_length_str += strlen("Content-Length: ");
-                    srv->req->content_length = strtol(content_length_str, NULL, 10);
+                    conn->req->content_length = strtol(content_length_str, NULL, 10);
                 }
 
-                srv->req->headers = malloc(nread + 1);
-                if (!srv->req->headers)
+                conn->req->headers = malloc(header_len + 1);
+                if (!conn->req->headers)
                 {
                     _err("Falha ao alocar memória para headers");
-                    http_request_free(srv->req);
+                    http_request_free(conn->req);
                     free(buf->base);
                     return;
                 }
 
-                memcpy(srv->req->headers, buf->base, nread - strlen(header_end) + 1);
-                srv->req->headers[nread] = '\0';
-                srv->req->header_parsed = 1;
+                memcpy(conn->req->headers, buf->base, header_len);
+                conn->req->headers[nread] = '\0';
+                conn->req->header_parsed = 1;
             }
         }
 
-        if (srv->req->header_parsed)
+        if (conn->req->header_parsed)
         {
-            srv->req->total_read += nread;
+            conn->req->total_read += nread;
 
-            if (srv && srv->cb)
+            _debug("Inicio cb para on_request");
+            if (conn && conn->srv->cb)
             {
-                srv->cb(srv->req, client);
+                conn->srv->cb(conn->req, client);
             }
+            _debug("Fim cb para on_request");
 
-            free(srv->req->headers);
-            srv->req->headers = NULL;
+            // @todo Fazer req->end
+            // free(conn->req->headers);
+            // conn->req->headers = NULL;
 
-            uv_read_stop(client);
+            // uv_read_stop(client);
         }
     }
     else if (nread < 0)
@@ -89,11 +96,14 @@ static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
             _err("Erro: %s", uv_strerror(nread));
         }
 
-        http_request_free(srv->req);
+        http_request_free(conn->req);
         uv_close((uv_handle_t *)client, NULL);
     }
 
-    free(buf->base);
+    if (buf->base)
+    {
+        free(buf->base);
+    }
 }
 
 static void on_new_connection(uv_stream_t *stream, int status)
@@ -113,20 +123,30 @@ static void on_new_connection(uv_stream_t *stream, int status)
         return;
     }
 
+    server_conn *conn = malloc(sizeof(server_conn));
+    if (!conn)
+    {
+        _err("Falha ao alocar memória para connexão");
+        return;
+    }
+    conn->req = NULL;
+    conn->srv = NULL;
+
     uv_tcp_init(srv->loop, client);
 
     if (uv_accept(stream, (uv_stream_t *)client) == 0)
     {
-        srv->req = http_request_create((uv_stream_t *)client);
+        conn->req = http_request_create((uv_stream_t *)client);
+        conn->srv = srv;
 
-        if (!srv->req)
+        if (!conn->req)
         {
             _err("Falha ao alocar memória para request");
             free(client);
             return;
         }
 
-        client->data = srv;
+        client->data = conn;
         uv_read_start((uv_stream_t *)client, alloc_buffer, on_read);
     }
     else
@@ -138,7 +158,7 @@ static void on_new_connection(uv_stream_t *stream, int status)
 
 server *server_create(server_cb cb)
 {
-    server *server = malloc(sizeof(server));
+    server *server = malloc(sizeof(*server));
 
     if (!server)
     {
@@ -148,7 +168,6 @@ server *server_create(server_cb cb)
 
     server->loop = uv_default_loop();
     server->cb = cb;
-    server->req = NULL;
     server->socket.data = server;
 
     uv_tcp_init(server->loop, &server->socket);
