@@ -1,8 +1,22 @@
 #include <stdlib.h>
-#include <uv.h>
 
 #include "applog.h"
 #include "http/http.h"
+
+http_response_t *http_response_create()
+{
+    http_response_t *res = (http_response_t *)malloc(sizeof(http_response_t));
+    if (!res)
+    {
+        _err("Falha ao alocar memória para response");
+        return NULL;
+    }
+
+    res->headers = http_headers_create();
+    res->json = http_send_json;
+
+    return res;
+}
 
 char *http_response_json(http_status_code_t status_code, const char *json_body, const char *custom_headers)
 {
@@ -36,4 +50,16 @@ char *http_response_json(http_status_code_t status_code, const char *json_body, 
     snprintf(response, response_size, HTTP_RESPONSE_TEMPLATE, status_code, status_message, custom_headers ? custom_headers : "", content_length, json_body);
 
     return response;
+}
+
+void http_response_free(http_response_t *res)
+{
+    if (!res)
+    {
+        return;
+    }
+
+    http_headers_free(res->headers);
+
+    free(res);
 }

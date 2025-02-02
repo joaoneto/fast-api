@@ -1,9 +1,9 @@
 #include <stdlib.h>
-#include <uv.h>
 
+#include "applog.h"
 #include "http/http.h"
 
-http_request_t *http_request_create(uv_stream_t *client)
+http_request_t *http_request_create()
 {
     http_request_t *req = (http_request_t *)malloc(sizeof(http_request_t));
     if (!req)
@@ -13,11 +13,9 @@ http_request_t *http_request_create(uv_stream_t *client)
     }
 
     req->headers = http_headers_create();
-    req->body = NULL;
     req->total_read = 0;
     req->content_length = 0;
     req->header_parsed = 0;
-    req->json = http_send_json;
 
     return req;
 }
@@ -58,12 +56,6 @@ void http_request_free(http_request_t *req)
     }
 
     http_headers_free(req->headers);
-
-    if (req->body)
-    {
-        free(req->body);
-        req->body = NULL;
-    }
 
     free(req);
 }

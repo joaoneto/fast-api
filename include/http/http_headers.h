@@ -1,8 +1,6 @@
 #ifndef HTTP_HEADERS_H
 #define HTTP_HEADERS_H
 
-#include "http/http.h"
-
 typedef struct http_header_t
 {
     char *key;

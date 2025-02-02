@@ -1,5 +1,6 @@
 #include <stdlib.h>
 
+#include "applog.h"
 #include "http/http.h"
 
 http_headers_t *http_headers_create()

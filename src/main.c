@@ -10,7 +10,7 @@
 #define DEFAULT_PORT 3000
 #define DEFAULT_BACKLOG 128
 
-void on_request(http_request_t *req, uv_stream_t *client)
+void on_request(http_request_t *req, http_response_t *res, uv_stream_t *client)
 {
     if (req->total_read >= req->content_length)
     {
@@ -28,17 +28,18 @@ void on_request(http_request_t *req, uv_stream_t *client)
         _debug("Content length: %d", req->content_length);
         _debug("Total Read: %d", req->total_read);
 
-        req->json("{ \"message\": \"Hello world!\" }", client);
+        res->json("{ \"message\": \"Hello world!\" }", client);
 
         // @todo Fazer req->end
         http_request_free(req);
+        http_response_free(res);
         uv_read_stop(client);
     }
 }
 
 int main()
 {
-    server *srv = server_create(on_request);
+    server_t *server = server_create(on_request);
 
-    return server_listen(srv, "0.0.0.0", DEFAULT_PORT);
+    return server_listen(server, "0.0.0.0", DEFAULT_PORT);
 }
