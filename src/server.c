@@ -3,7 +3,7 @@
 #include <uv.h>
 
 #include "applog.h"
-#include "http.h"
+#include "http/http.h"
 #include "server.h"
 
 #define DEFAULT_BACKLOG 128
@@ -48,9 +48,9 @@ static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
 
                 char *first_line = strtok(headers_str, "\r\n");
                 char *first_line_copy = strdup(first_line);
-                http_parse_request_line(conn->req, first_line_copy);
+                http_request_parse_line(conn->req, first_line_copy);
                 free(first_line_copy);
-                http_parse_headers(conn->req, headers_str + strlen(first_line) + 2);
+                http_request_parse_headers(conn->req, headers_str + strlen(first_line) + 2);
 
                 free(headers_str);
 

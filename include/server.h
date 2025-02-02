@@ -3,9 +3,9 @@
 
 #include <uv.h>
 
-#include "http.h"
+#include "http/http.h"
 
-typedef void (*server_cb)(http_request *req, uv_stream_t *client);
+typedef void (*server_cb)(http_request_t *req, uv_stream_t *client);
 
 typedef struct
 {
@@ -17,7 +17,7 @@ typedef struct
 typedef struct
 {
     server *srv;
-    http_request *req;
+    http_request_t *req;
 } server_conn;
 
 int server_listen(server *srv, const char *ip, int port);

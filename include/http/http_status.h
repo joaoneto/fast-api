@@ -1,16 +1,5 @@
-#ifndef HTTP_H
-#define HTTP_H
-
-#include <string.h>
-#include <uv.h>
-
-#define HTTP_RESPONSE_TEMPLATE \
-    "HTTP/1.1 %d %s\r\n"       \
-    "%s"                       \
-    "Content-Length: %zu\r\n"  \
-    "Connection: close\r\n"    \
-    "\r\n"                     \
-    "%s"
+#ifndef HTTP_STATUS_H
+#define HTTP_STATUS_H
 
 typedef enum
 {
@@ -73,15 +62,15 @@ typedef enum
     HTTP_LOOP_DETECTED = 508,
     HTTP_NOT_EXTENDED = 510,
     HTTP_NETWORK_AUTHENTICATION_REQUIRED = 511
-} http_status_code;
+} http_status_code_t;
 
 typedef struct
 {
-    http_status_code code;
+    http_status_code_t code;
     const char *message;
-} http_status_message;
+} http_status_message_t;
 
-static const http_status_message http_status_messages[] = {
+static const http_status_message_t http_status_messages[] = {
     {HTTP_CONTINUE, "Continue"},
     {HTTP_SWITCHING_PROTOCOL, "Switching Protocols"},
     {HTTP_PROCESSING, "Processing"},
@@ -142,43 +131,6 @@ static const http_status_message http_status_messages[] = {
     {HTTP_NOT_EXTENDED, "Not Extended"},
     {HTTP_NETWORK_AUTHENTICATION_REQUIRED, "Network Authentication Required"}};
 
-typedef struct
-{
-    char *key;
-    char *value;
-} http_header;
-
-typedef struct
-{
-    uv_stream_t *client; // Stream do cliente
-    char *method;
-    char *path;
-    char *version;
-    size_t header_count;
-    http_header *headers;  // Armazena os headers HTTP
-    int header_parsed;     // Flag para indicar se o header já foi processado
-    size_t total_read;     // Total de bytes lidos do corpo
-    size_t content_length; // Tamanho esperado do conteúdo
-    char *body;            // Buffer para armazenar o corpo da requisição
-    int (*json)(const char *req, uv_stream_t *client);
-} http_request;
-
-const char *http_status_str(http_status_code code);
-
-char *http_get_header(http_request *req, const char *key);
-
-http_request *http_request_create(uv_stream_t *client);
-
-char *http_json_response(http_status_code status_code, const char *json_body, const char *custom_headers);
-
-int http_send(const char *res, uv_stream_t *client);
-
-int http_send_json(const char *res, uv_stream_t *client);
-
-void http_parse_request_line(http_request *req, char *line);
-
-void http_parse_headers(http_request *req, char *headers);
-
-void http_request_free(http_request *req);
+const char *http_status_str(http_status_code_t code);
 
 #endif
