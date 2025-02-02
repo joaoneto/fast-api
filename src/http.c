@@ -4,6 +4,18 @@
 #include "applog.h"
 #include "http.h"
 
+const char *http_status_str(http_status_code code)
+{
+    for (size_t i = 0; i < sizeof(http_status_messages) / sizeof(http_status_messages[0]); ++i)
+    {
+        if (http_status_messages[i].code == code)
+        {
+            return http_status_messages[i].message;
+        }
+    }
+    return "Unknown Status Code"; // Caso o código não seja encontrado
+}
+
 char *http_get_header(http_request *req, const char *key)
 {
     for (size_t i = 0; i < req->header_count; i++)
@@ -35,7 +47,7 @@ http_request *http_request_create(uv_stream_t *client)
     return req;
 }
 
-char *http_json_response(const char *json_body)
+char *http_json_response(http_status_code status_code, const char *json_body, const char *custom_headers)
 {
     if (!json_body)
     {
@@ -44,11 +56,14 @@ char *http_json_response(const char *json_body)
 
     size_t content_length = strlen(json_body);
 
+    // Obtém a mensagem associada ao código de status
+    const char *status_message = http_status_str(status_code);
+
     // Calcula o tamanho necessário para a resposta HTTP
-    int needed_size = snprintf(NULL, 0, HTTP_RESPONSE_TEMPLATE, content_length, json_body);
+    int needed_size = snprintf(NULL, 0, HTTP_RESPONSE_TEMPLATE, status_code, status_message, custom_headers ? custom_headers : "", content_length, json_body);
     if (needed_size <= 0)
     {
-        _err("Erro ao calcular tamanho da resposta HTTP!");
+        fprintf(stderr, "Erro ao calcular tamanho da resposta HTTP!\n");
         return NULL;
     }
 
@@ -56,12 +71,12 @@ char *http_json_response(const char *json_body)
     char *response = malloc(response_size);
     if (!response)
     {
-        _err("Falha ao alocar memória para resposta HTTP!");
+        fprintf(stderr, "Falha ao alocar memória para resposta HTTP!\n");
         return NULL;
     }
 
     // Preenche o buffer com a resposta formatada
-    snprintf(response, response_size, HTTP_RESPONSE_TEMPLATE, content_length, json_body);
+    snprintf(response, response_size, HTTP_RESPONSE_TEMPLATE, status_code, status_message, custom_headers ? custom_headers : "", content_length, json_body);
 
     return response;
 }
@@ -88,9 +103,22 @@ int http_send(const char *res, uv_stream_t *client)
 
 int http_send_json(const char *res, uv_stream_t *client)
 {
-    const char *r = http_json_response(res);
+    http_status_code status_code = HTTP_OK;
 
-    return http_send(r, client);
+    const char *headers = "Content-Type: application/json; charset=utf-8\r\n";
+
+    char *response = http_json_response(status_code, res, headers);
+
+    if (!response)
+    {
+        return -1;
+    }
+
+    int result = http_send(response, client);
+
+    free(response);
+
+    return result;
 }
 
 void http_parse_request_line(http_request *req, char *line)
