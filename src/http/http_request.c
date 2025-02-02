@@ -12,7 +12,7 @@ http_request_t *http_request_create(uv_stream_t *client)
         return NULL;
     }
 
-    req->headers = NULL;
+    req->headers = http_headers_create();
     req->body = NULL;
     req->total_read = 0;
     req->content_length = 0;
@@ -20,18 +20,6 @@ http_request_t *http_request_create(uv_stream_t *client)
     req->json = http_send_json;
 
     return req;
-}
-
-char *http_request_header(http_request_t *req, const char *key)
-{
-    for (size_t i = 0; i < req->header_count; i++)
-    {
-        if (strcasecmp(req->headers[i].key, key) == 0)
-        {
-            return req->headers[i].value;
-        }
-    }
-    return NULL;
 }
 
 void http_request_parse_line(http_request_t *req, char *line)
@@ -55,9 +43,7 @@ void http_request_parse_headers(http_request_t *req, char *headers)
             *sep = '\0';
             char *key = line;
             char *value = sep + 2;
-            req->headers = realloc(req->headers, (req->header_count + 1) * sizeof(http_request_header_t));
-            req->headers[req->header_count].key = strdup(key);
-            req->headers[req->header_count].value = strdup(value);
+            http_headers_add(req->headers, key, value);
             req->header_count++;
         }
         line = strtok(NULL, "\r\n");
@@ -71,11 +57,7 @@ void http_request_free(http_request_t *req)
         return;
     }
 
-    if (req->headers)
-    {
-        free(req->headers);
-        req->headers = NULL;
-    }
+    http_headers_free(req->headers);
 
     if (req->body)
     {

@@ -16,10 +16,9 @@ void on_request(http_request_t *req, uv_stream_t *client)
     {
         _info("Corpo da requisição completamente lido");
 
-        _debug("Headers Content-Type: %s", http_request_header(req, "Content-type"));
-        _debug("Headers Content-Length: %s", http_request_header(req, "content-Length"));
-        _debug("Headers User-Agent: %s", http_request_header(req, "user-agent"));
-        _debug("Headers Host: %s", http_request_header(req, "HosT"));
+        char *all_headers_debug = http_headers_debug(req->headers);
+        _debug("Headers %s", all_headers_debug);
+        free(all_headers_debug);
 
         _debug("REQ Method: %s", req->method);
         _debug("REQ Path: %s", req->path);
