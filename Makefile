@@ -11,8 +11,8 @@ TARGET_DIR = target
 DEBUG_DIR = $(TARGET_DIR)/debug
 RELEASE_DIR = $(TARGET_DIR)/release
 
-# Encontrar automaticamente todos os arquivos .c em src/
-SRC_FILES = $(wildcard $(SRC_DIR)/*.c)
+# Encontrar automaticamente todos os arquivos .c em src/ e subdiretórios
+SRC_FILES = $(shell find $(SRC_DIR) -type f -name "*.c")
 
 # Criar automaticamente a lista de objetos .o correspondente para Debug e Release
 DEBUG_OBJS = $(patsubst $(SRC_DIR)/%.c, $(DEBUG_DIR)/%.o, $(SRC_FILES))
@@ -28,12 +28,13 @@ all: debug
 $(DEBUG_DIR) $(RELEASE_DIR):
 	@mkdir -p $@
 
-# Compilar arquivos .c para objetos .o (modo Debug)
+# Criar diretórios de objetos mantendo a estrutura de src/
 $(DEBUG_DIR)/%.o: $(SRC_DIR)/%.c | $(DEBUG_DIR)
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS_DEBUG) -I$(INC_DIR) -c $< -o $@
 
-# Compilar arquivos .c para objetos .o (modo Release)
 $(RELEASE_DIR)/%.o: $(SRC_DIR)/%.c | $(RELEASE_DIR)
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS_RELEASE) -I$(INC_DIR) -c $< -o $@
 
 # Linkar os objetos e gerar o binário final (modo Debug)
