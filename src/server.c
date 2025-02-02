@@ -53,6 +53,14 @@ static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
                 http_parse_headers(conn->req, headers_str + strlen(first_line) + 2);
 
                 free(headers_str);
+
+                char *content_length_pos = strcasestr(buf->base, "content-length: ");
+                if (content_length_pos)
+                {
+                    content_length_pos += 16;
+                    conn->req->content_length = strtol(content_length_pos, NULL, 10);
+                }
+
                 conn->req->header_parsed = 1;
             }
         }
@@ -61,18 +69,16 @@ static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
         {
             conn->req->total_read += nread;
 
-            _debug("Inicio cb para on_request");
             if (conn && conn->srv->cb)
             {
                 conn->srv->cb(conn->req, client);
             }
-            _debug("Fim cb para on_request");
 
             // @todo Fazer req->end
-            // free(conn->req->headers);
-            // conn->req->headers = NULL;
-
+            // http_request_free(conn->req);
             // uv_read_stop(client);
+            // uv_close((uv_handle_t *)client, NULL);
+            // return;
         }
     }
     else if (nread < 0)
