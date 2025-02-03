@@ -17,6 +17,7 @@ http_response_t *http_response_create()
     res->headers = http_headers_create();
     res->status = HTTP_OK;
     res->json = http_response_json;
+    res->end = http_response_end;
 
     return res;
 }
@@ -104,6 +105,25 @@ int http_response_json(const char *json_body, uv_stream_t *client)
     free(response);
 
     return result;
+}
+
+int http_response_end(uv_stream_t *client)
+{
+    server_conn_t *conn = (server_conn_t *)client->data;
+
+    if (uv_read_stop(client) != 0)
+    {
+        _err("Erro parando leitura do request");
+        uv_close((uv_handle_t *)client, NULL);
+        return -1;
+    }
+
+    http_request_free(conn->req);
+    http_response_free(conn->res);
+
+    uv_close((uv_handle_t *)client, NULL);
+
+    return 0;
 }
 
 void http_response_free(http_response_t *res)

@@ -28,15 +28,11 @@ void on_request(http_request_t *req, http_response_t *res, uv_stream_t *client)
         _debug("Content length: %d", req->content_length);
         _debug("Total Read: %d", req->total_read);
 
-        res->status = HTTP_NOT_FOUND;
         http_headers_add(res->headers, "X-ok", "true");
-        res->json("{ \"message\": \"Hello world!\" }", client);
 
-        // @todo Fazer req->end
-        http_request_free(req);
-        http_response_free(res);
-        uv_read_stop(client);
-        uv_close((uv_handle_t *)client, NULL);
+        res->status = HTTP_NOT_FOUND;
+        res->json("{ \"message\": \"Hello world!\" }", client);
+        res->end(client);
     }
 }
 
