@@ -36,6 +36,7 @@ void on_request(http_request_t *req, http_response_t *res, uv_stream_t *client)
         http_request_free(req);
         http_response_free(res);
         uv_read_stop(client);
+        uv_close((uv_handle_t *)client, NULL);
     }
 }
 
