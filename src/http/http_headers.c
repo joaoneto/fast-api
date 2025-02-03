@@ -60,11 +60,18 @@ char *http_headers_serialize(http_headers_t *headers)
 {
     if (!headers)
     {
-        return strdup("");
+        return strdup("\r\n");
     }
 
-    size_t buffer_size = 256;
-    char *buffer = (char *)malloc(buffer_size);
+    size_t buffer_size = 1; // \0
+    http_header_t *current = headers->head;
+    while (current)
+    {
+        buffer_size += snprintf(NULL, 0, "%s: %s\r\n", current->key, current->value);
+        current = current->next;
+    }
+
+    char *buffer = (char *)malloc(buffer_size + 1);
     if (!buffer)
     {
         _err("Falha ao alocar memória para serialização de headers");
@@ -72,26 +79,13 @@ char *http_headers_serialize(http_headers_t *headers)
     }
     buffer[0] = '\0';
 
-    http_header_t *current = headers->head;
+    current = headers->head;
     while (current)
     {
-        size_t required_size = strlen(current->key) + strlen(current->value) + 4;
-        if (strlen(buffer) + required_size >= buffer_size)
-        {
-            buffer_size *= 2;
-            buffer = (char *)realloc(buffer, buffer_size);
-            if (!buffer)
-            {
-                _err("Falha ao realocar memória para headers");
-                return NULL;
-            }
-        }
-        strcat(buffer, current->key);
-        strcat(buffer, ": ");
-        strcat(buffer, current->value);
-        strcat(buffer, "\r\n");
+        snprintf(buffer + strlen(buffer), buffer_size - strlen(buffer), "%s: %s\r\n", current->key, current->value);
         current = current->next;
     }
+
     return buffer;
 }
 
@@ -110,6 +104,7 @@ void http_headers_free(http_headers_t *headers)
         free(temp->key);
         free(temp->value);
         free(temp);
+        temp = NULL;
     }
 
     free(headers);

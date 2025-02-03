@@ -29,16 +29,6 @@ int http_response_json(const char *json_body, uv_stream_t *client)
 
     http_status_code_t status = res->status;
 
-    // Verifica se existe header Content-Type na request
-    if (!http_headers_get(res->headers, "content-type"))
-    {
-        // Se não existir, usa o mesmo Content-Type da request na response
-        char *req_content_type = http_headers_get(conn->req->headers, "content-type");
-        http_headers_add(res->headers, "Content-Type", req_content_type);
-    }
-
-    char *headers = http_headers_serialize(res->headers);
-
     if (!conn || !res)
     {
         _err("Erro ao obter conexão da resposta HTTP");
@@ -50,13 +40,47 @@ int http_response_json(const char *json_body, uv_stream_t *client)
         json_body = "{}";
     }
 
-    size_t content_length = strlen(json_body);
+    // Verifica se existe header Content-Type na request
+    if (!http_headers_get(res->headers, "content-type"))
+    {
+        // Se não existir, usa o mesmo Content-Type da request na response
+        char *req_content_type = http_headers_get(conn->req->headers, "content-type");
+        http_headers_add(res->headers, "Content-Type", req_content_type ? req_content_type : "application/json");
+    }
+
+    // Verifica se existe header Content-Length na request
+    if (!http_headers_get(res->headers, "content-length"))
+    {
+        size_t content_length = strlen(json_body);
+        int len = snprintf(NULL, 0, "%zu", content_length);
+        if (len < 0)
+        {
+            _debug("Erro ao calcular o tamanho");
+            return 1;
+        }
+
+        char *content_length_str = (char *)malloc((len + 1) * sizeof(char)); // +1 para o '\0'
+
+        if (content_length_str != NULL)
+        {
+            // Converte size_t para string
+            snprintf(content_length_str, len + 1, "%zu", content_length);
+            http_headers_add(res->headers, "Content-Length", content_length_str);
+            free(content_length_str);
+        }
+    }
+
+    char *headers = http_headers_serialize(res->headers);
+    if (!headers)
+    {
+        headers = strdup("\r\n");
+    }
 
     // Obtém a mensagem associada ao código de status
     const char *status_message = http_status_str(status);
 
     // Calcula o tamanho necessário para a resposta HTTP
-    int needed_size = snprintf(NULL, 0, HTTP_RESPONSE_TEMPLATE, status, status_message, headers, content_length, json_body);
+    int needed_size = snprintf(NULL, 0, HTTP_RESPONSE_TEMPLATE, status, status_message, headers, json_body);
     if (needed_size <= 0)
     {
         _err("Erro ao calcular tamanho da resposta HTTP");
@@ -72,7 +96,7 @@ int http_response_json(const char *json_body, uv_stream_t *client)
     }
 
     // Preenche o buffer com a resposta formatada
-    snprintf(response, response_size, HTTP_RESPONSE_TEMPLATE, status, status_message, headers, content_length, json_body);
+    snprintf(response, response_size, HTTP_RESPONSE_TEMPLATE, status, status_message, headers, json_body);
 
     int result = http_send(response, client);
 

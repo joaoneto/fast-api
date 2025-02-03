@@ -10,8 +10,6 @@
 #define HTTP_RESPONSE_TEMPLATE \
     "HTTP/1.1 %d %s\r\n"       \
     "%s"                       \
-    "Content-Length: %zu\r\n"  \
-    "Connection: close\r\n"    \
     "\r\n"                     \
     "%s"
 
