@@ -17,7 +17,7 @@ http_headers_t *http_headers_create();
 
 void http_headers_add(http_headers_t *headers, const char *key, const char *value);
 
-char *http_header_get(http_headers_t *headers, const char *key);
+char *http_headers_get(http_headers_t *headers, const char *key);
 
 char *http_headers_serialize(http_headers_t *headers);
 

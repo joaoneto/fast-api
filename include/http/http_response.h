@@ -4,6 +4,7 @@
 #include <string.h>
 #include <uv.h>
 
+#include "http/http_headers.h"
 #include "http/http_status.h"
 
 #define HTTP_RESPONSE_TEMPLATE \
@@ -16,13 +17,14 @@
 
 typedef struct
 {
-    http_headers_t *headers; // Armazena os headers HTTP
-    int (*json)(const char *req, uv_stream_t *client);
+    http_headers_t *headers;
+    http_status_code_t status;
+    int (*json)(const char *json_body, uv_stream_t *client);
 } http_response_t;
 
 http_response_t *http_response_create();
 
-char *http_response_json(http_status_code_t status_code, const char *json_body, const char *custom_headers);
+int http_response_json(const char *json_body, uv_stream_t *client);
 
 void http_response_free(http_response_t *res);
 

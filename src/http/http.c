@@ -23,23 +23,3 @@ int http_send(const char *res, uv_stream_t *client)
 
     return 0;
 }
-
-int http_send_json(const char *res, uv_stream_t *client)
-{
-    http_status_code_t status_code = HTTP_OK;
-
-    const char *headers = "Content-Type: application/json; charset=utf-8\r\n";
-
-    char *response = http_response_json(status_code, res, headers);
-
-    if (!response)
-    {
-        return -1;
-    }
-
-    int result = http_send(response, client);
-
-    free(response);
-
-    return result;
-}

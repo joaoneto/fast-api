@@ -28,6 +28,8 @@ void on_request(http_request_t *req, http_response_t *res, uv_stream_t *client)
         _debug("Content length: %d", req->content_length);
         _debug("Total Read: %d", req->total_read);
 
+        res->status = HTTP_NOT_FOUND;
+        http_headers_add(res->headers, "X-ok", "true");
         res->json("{ \"message\": \"Hello world!\" }", client);
 
         // @todo Fazer req->end

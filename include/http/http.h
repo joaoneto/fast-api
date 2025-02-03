@@ -11,6 +11,4 @@
 
 int http_send(const char *res, uv_stream_t *client);
 
-int http_send_json(const char *res, uv_stream_t *client);
-
 #endif
