@@ -16,9 +16,9 @@ void on_request(http_request_t *req, http_response_t *res, uv_stream_t *client)
     {
         _info("Corpo da requisição completamente lido");
 
-        char *all_headers_debug = http_headers_debug(req->headers);
-        _debug("Headers %s", all_headers_debug);
-        free(all_headers_debug);
+        char *headers_str = http_headers_serialize(req->headers);
+        _debug("Headers %s", headers_str);
+        free(headers_str);
 
         _debug("REQ Method: %s", req->method);
         _debug("REQ Path: %s", req->path);

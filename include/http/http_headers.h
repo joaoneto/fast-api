@@ -19,7 +19,7 @@ void http_headers_add(http_headers_t *headers, const char *key, const char *valu
 
 char *http_header_get(http_headers_t *headers, const char *key);
 
-char *http_headers_debug(http_headers_t *headers);
+char *http_headers_serialize(http_headers_t *headers);
 
 void http_headers_free(http_headers_t *headers);
 

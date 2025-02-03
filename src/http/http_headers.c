@@ -56,61 +56,43 @@ char *http_header_get(http_headers_t *headers, const char *key)
     return NULL;
 }
 
-char *http_headers_debug(http_headers_t *headers)
+char *http_headers_serialize(http_headers_t *headers)
 {
-    if (!headers || !headers->head)
+    if (!headers)
     {
-        return strdup("{}");
+        return strdup("");
     }
 
-    // Espaço para "{\n"
-    // 2 caracteres + 1 para '\0'
-    size_t total_len = strlen("{\n");
+    size_t buffer_size = 256;
+    char *buffer = (char *)malloc(buffer_size);
+    if (!buffer)
+    {
+        _err("Falha ao alocar memória para serialização de headers");
+        return NULL;
+    }
+    buffer[0] = '\0';
 
     http_header_t *current = headers->head;
     while (current)
     {
-        // Para cada header, usamos o formato:
-        // "  \"%s\": \"%s\", \n"
-        // 2 (espaços) + 1 (aspas) + 4 (": ") + 1 (aspas) + 4 (", \n") = 12.
-        total_len += 12 + strlen(current->key) + strlen(current->value);
+        size_t required_size = strlen(current->key) + strlen(current->value) + 4;
+        if (strlen(buffer) + required_size >= buffer_size)
+        {
+            buffer_size *= 2;
+            buffer = (char *)realloc(buffer, buffer_size);
+            if (!buffer)
+            {
+                _err("Falha ao realocar memória para headers");
+                return NULL;
+            }
+        }
+        strcat(buffer, current->key);
+        strcat(buffer, ": ");
+        strcat(buffer, current->value);
+        strcat(buffer, "\r\n");
         current = current->next;
     }
-    // Remover os 2 caracteres extras (", " e "\n") do final (-2)
-    // e adicionar espaço para o fechamento "\n}" (2 caracteres) e o caractere nulo. (+3)
-    // total_len -= 2;
-    // total_len += 3;
-    total_len += 1;
-
-    // Alocar buffer suficiente
-    char *result = (char *)malloc(total_len);
-    if (!result)
-    {
-        return NULL;
-    }
-
-    strcpy(result, "{\n");
-    size_t pos = strlen(result);
-
-    // Preenche com cada header
-    current = headers->head;
-    while (current)
-    {
-        // Sprintf para escrever diretamente na posição atual
-        int written = sprintf(result + pos, "  \"%s\": \"%s\", \n", current->key, current->value);
-        pos += written;
-        current = current->next;
-    }
-
-    // Remove os últimos ", \n" adicionados por último
-    if (pos >= 3)
-    {
-        pos -= 3;
-    }
-
-    sprintf(result + pos, "\n}");
-
-    return result;
+    return buffer;
 }
 
 void http_headers_free(http_headers_t *headers)
