@@ -34,7 +34,7 @@
             "type": "shell",
             "command": "make",
             "args": [
-                "debug"
+                "release"
             ],
             "group": {
             "kind": "build",

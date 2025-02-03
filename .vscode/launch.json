@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug",
+            "name": "Debug with GDB",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/target/debug/app",
@@ -12,7 +12,6 @@
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",
-            "miDebuggerPath": "/usr/bin/gdb",
             "preLaunchTask": "Build (debug)",
             "serverLaunchTimeout": 2000,
             "setupCommands": [
@@ -24,6 +23,29 @@
                 {
                     "description": "Evita erro ao carregar fontes externas",
                     "text": "set auto-load safe-path /"
+                }
+            ],
+            "sourceFileMap": {
+                "/usr/src": "${workspaceFolder}/src"
+            }
+        },
+        {
+            "name": "Debug with LLDB",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/target/debug/app",
+            "args": [],
+            "stopAtEntry": true,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "lldb",
+            "preLaunchTask": "Build (debug)",
+            "setupCommands": [
+                {
+                    "description": "Habilita pretty-printing para LLDB",
+                    "text": "settings set target.inline-breakpoint-strategy always",
+                    "ignoreFailures": true
                 }
             ],
             "sourceFileMap": {
