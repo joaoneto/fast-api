@@ -24,7 +24,6 @@ void on_request(http_request_t *req, http_response_t *res, uv_stream_t *client)
         _debug("REQ Path: %s", req->path);
         _debug("REQ Version: %s", req->version);
 
-        _debug("Headers count: %d", req->header_count);
         _debug("Content length: %d", req->content_length);
         _debug("Total Read: %d", req->total_read);
 

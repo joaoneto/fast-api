@@ -10,12 +10,11 @@
 
 typedef struct
 {
-    char *method;
-    char *path;
-    char *version;
-    size_t header_count;
-    http_headers_t *headers; // Armazena os headers HTTP
+    char *method;            // Método HTTP
+    char *path;              // Caminho do request
+    char *version;           // Versão HTTP do request
     int header_parsed;       // Flag para indicar se o header já foi processado
+    http_headers_t *headers; // Armazena os headers HTTP
     size_t total_read;       // Total de bytes lidos do corpo
     size_t content_length;   // Tamanho esperado do conteúdo
 } http_request_t;

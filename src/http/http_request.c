@@ -31,7 +31,6 @@ void http_request_parse_line(http_request_t *req, char *line)
 void http_request_parse_headers(http_request_t *req, char *headers)
 {
     char *line = strtok(headers, "\r\n");
-    req->header_count = 0;
 
     while (line)
     {
@@ -42,7 +41,6 @@ void http_request_parse_headers(http_request_t *req, char *headers)
             char *key = line;
             char *value = sep + 2;
             http_headers_add(req->headers, key, value);
-            req->header_count++;
         }
         line = strtok(NULL, "\r\n");
     }

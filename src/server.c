@@ -74,11 +74,7 @@ static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
                 conn->server->cb(conn->req, conn->res, client);
             }
 
-            // @todo Fazer req->end
-            // http_request_free(conn->req);
-            // uv_read_stop(client);
-            // uv_close((uv_handle_t *)client, NULL);
-            // return;
+            // @todo Fazer timeout da requisição
         }
     }
     else if (nread < 0)
