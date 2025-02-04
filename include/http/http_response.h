@@ -17,13 +17,16 @@ typedef struct
 {
     http_headers_t *headers;
     http_status_code_t status;
+    int sent;
+    int (*send)(const char *str_body, uv_stream_t *client);
     int (*json)(const char *json_body, uv_stream_t *client);
-    int (*end)(uv_stream_t *client);
 } http_response_t;
 
 http_response_t *http_response_create();
 
-int http_response_json(const char *json_body, uv_stream_t *client);
+int http_response_send(const char *str_body, uv_stream_t *client);
+
+int http_response_json(const char *str_json_body, uv_stream_t *client);
 
 int http_response_end(uv_stream_t *client);
 

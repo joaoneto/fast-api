@@ -31,7 +31,10 @@ void on_request(http_request_t *req, http_response_t *res, uv_stream_t *client)
 
         res->status = HTTP_NOT_FOUND;
         res->json("{ \"message\": \"Hello world!\" }", client);
-        res->end(client);
+
+        // res->status = HTTP_GATEWAY_TIMEOUT;
+        // res->status = HTTP_REQUEST_TIMEOUT;
+        // res->send("Atingiu o tempo limite da requisição!", client);
     }
 }
 

@@ -7,6 +7,8 @@
 #include "server.h"
 
 #define DEFAULT_BACKLOG 128
+#define DEFAULT_TIMEOUT_MS 3000
+#define DEFAULT_MAX_READ_BYTES 2 * 1024 * 1024
 
 static void alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
 {
@@ -22,17 +24,33 @@ static void alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *b
     }
 }
 
+static void on_timeout(uv_timer_t *timer)
+{
+    uv_stream_t *client = (uv_stream_t *)timer->data;
+    server_conn_t *conn = (server_conn_t *)client->data;
+    http_response_t *res = (http_response_t *)conn->res;
+
+    _err("Tempo limite da requisição atingido, fechando conexão");
+
+    uv_read_stop((uv_stream_t *)client);
+    uv_timer_stop((uv_timer_t *)conn->timeout);
+
+    res->status = HTTP_REQUEST_TIMEOUT;
+    res->json("{ \"message\": \"Tempo limite da requisição atingido, fechando conexão\" }", client);
+}
+
 static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
 {
     server_conn_t *conn = (server_conn_t *)client->data;
 
-    if (!conn->req || !conn->req)
+    if (!conn->req || !conn->res)
     {
         _err("Conexão não inicializado com Req ou Res");
         if (buf->base)
         {
             free(buf->base);
         }
+
         return;
     }
 
@@ -69,12 +87,27 @@ static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
         {
             conn->req->total_read += nread;
 
+            if (conn->req->total_read > DEFAULT_MAX_READ_BYTES || conn->req->content_length > DEFAULT_MAX_READ_BYTES)
+            {
+                _debug("%zu - %zu - %zu", conn->req->content_length, DEFAULT_MAX_READ_BYTES, conn->req->total_read);
+                _err("Requisição excedeu o limite de 2MB, encerrando conexão");
+
+                uv_read_stop(client);
+                uv_timer_stop((uv_timer_t *)conn->timeout);
+
+                conn->res->status = HTTP_PAYLOAD_TOO_LARGE;
+                conn->res->json("{ \"message\": \"Requisição excedeu o limite de 2MB, encerrando conexão\" }", client);
+
+                free(buf->base);
+                return;
+            }
+
             if (conn && conn->server->cb)
             {
                 conn->server->cb(conn->req, conn->res, client);
+                free(buf->base);
+                return;
             }
-
-            // @todo Fazer timeout da requisição
         }
     }
     else if (nread < 0)
@@ -88,8 +121,8 @@ static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
             _err("Erro: %s", uv_strerror(nread));
         }
 
-        http_request_free(conn->req);
-        http_response_free(conn->res);
+        server_conn_free(conn);
+
         uv_close((uv_handle_t *)client, NULL);
     }
 
@@ -141,6 +174,19 @@ static void on_new_connection(uv_stream_t *stream, int status)
         }
 
         client->data = conn;
+
+        // Inicia o timer para controlar o timeout da requisição
+        conn->timeout = malloc(sizeof(uv_timer_t));
+        if (!conn->timeout)
+        {
+            _err("Falha ao alocar timer");
+            return;
+        }
+        conn->timeout->data = client;
+        uv_timer_init(conn->server->loop, conn->timeout);
+        uv_timer_start(conn->timeout, on_timeout, DEFAULT_TIMEOUT_MS, 0);
+
+        // Inicia leitura da requisição
         uv_read_start((uv_stream_t *)client, alloc_buffer, on_read);
     }
     else
@@ -179,4 +225,22 @@ int server_listen(server_t *server, const char *ip, int port)
     uv_listen((uv_stream_t *)&server->socket, DEFAULT_BACKLOG, on_new_connection);
 
     return uv_run(server->loop, UV_RUN_DEFAULT);
+}
+
+void server_conn_free(server_conn_t *conn)
+{
+    if (!conn)
+    {
+        return;
+    }
+
+    http_request_free(conn->req);
+    http_response_free(conn->res);
+
+    if (conn->timeout)
+    {
+        free(conn->timeout);
+    }
+
+    free(conn);
 }

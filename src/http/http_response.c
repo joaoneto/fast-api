@@ -5,6 +5,9 @@
 #include "http/http.h"
 #include "server.h"
 
+#define CONTENT_TYPE ((http_header_t){"Content-Type", "application/json"})
+#define CONTENT_LENGTH ((http_header_t){"Content-Length", NULL})
+
 http_response_t *http_response_create()
 {
     http_response_t *res = (http_response_t *)malloc(sizeof(http_response_t));
@@ -14,45 +17,45 @@ http_response_t *http_response_create()
         return NULL;
     }
 
+    res->sent = 0;
     res->headers = http_headers_create();
     res->status = HTTP_OK;
+    res->send = http_response_send;
     res->json = http_response_json;
-    res->end = http_response_end;
 
     return res;
 }
 
-int http_response_json(const char *json_body, uv_stream_t *client)
+static void on_write_end(uv_write_t *write_req, int status)
 {
+    _debug("Escreveu a resposta para o client");
+
+    uv_stream_t *client = (uv_stream_t *)write_req->data;
     server_conn_t *conn = (server_conn_t *)client->data;
 
-    http_response_t *res = (http_response_t *)conn->res;
+    // Atrasando para fechar a conexão evitando o "ECONNRESET"
+    uv_sleep(1);
 
+    uv_close((uv_handle_t *)client, NULL);
+    uv_close((uv_handle_t *)conn->timeout, NULL);
+
+    server_conn_free(conn);
+    free(client);
+}
+
+int http_response_send(const char *str_body, uv_stream_t *client)
+{
+    server_conn_t *conn = (server_conn_t *)client->data;
+    http_response_t *res = (http_response_t *)conn->res;
     http_status_code_t status = res->status;
 
-    if (!conn || !res)
-    {
-        _err("Erro ao obter conexão da resposta HTTP");
-        return 1;
-    }
-
-    if (!json_body)
-    {
-        json_body = "{}";
-    }
-
-    // Verifica se existe header Content-Type na request
-    if (!http_headers_get(res->headers, "content-type"))
-    {
-        // Se não existir, usa o mesmo Content-Type da request na response
-        char *req_content_type = http_headers_get(conn->req->headers, "content-type");
-        http_headers_add(res->headers, "Content-Type", req_content_type ? req_content_type : "application/json");
-    }
+    uv_read_stop(client);
+    uv_timer_stop((uv_timer_t *)conn->timeout);
 
     // Verifica se existe header Content-Length na request
-    if (!http_headers_get(res->headers, "content-length"))
+    if (!http_headers_get(res->headers, CONTENT_LENGTH.key))
     {
-        size_t content_length = strlen(json_body);
+        size_t content_length = strlen(str_body);
         int len = snprintf(NULL, 0, "%zu", content_length);
         if (len < 0)
         {
@@ -66,7 +69,7 @@ int http_response_json(const char *json_body, uv_stream_t *client)
         {
             // Converte size_t para string
             snprintf(content_length_str, len + 1, "%zu", content_length);
-            http_headers_add(res->headers, "Content-Length", content_length_str);
+            http_headers_add(res->headers, CONTENT_LENGTH.key, content_length_str);
             free(content_length_str);
         }
     }
@@ -81,14 +84,15 @@ int http_response_json(const char *json_body, uv_stream_t *client)
     const char *status_message = http_status_str(status);
 
     // Calcula o tamanho necessário para a resposta HTTP
-    int needed_size = snprintf(NULL, 0, HTTP_RESPONSE_TEMPLATE, status, status_message, headers, json_body);
+    int needed_size = snprintf(NULL, 0, HTTP_RESPONSE_TEMPLATE, status, status_message, headers, str_body);
     if (needed_size <= 0)
     {
         _err("Erro ao calcular tamanho da resposta HTTP");
         return 1;
     }
 
-    size_t response_size = (size_t)needed_size + 1; // +1 para o '\0'
+    // +1 para o '\0'
+    size_t response_size = (size_t)needed_size + 1;
     char *response = malloc(response_size);
     if (!response)
     {
@@ -97,33 +101,35 @@ int http_response_json(const char *json_body, uv_stream_t *client)
     }
 
     // Preenche o buffer com a resposta formatada
-    snprintf(response, response_size, HTTP_RESPONSE_TEMPLATE, status, status_message, headers, json_body);
+    snprintf(response, response_size, HTTP_RESPONSE_TEMPLATE, status, status_message, headers, str_body);
 
-    int result = http_send(response, client);
+    _debug("Enviando resposta para o client:\n%s", response);
 
-    free(headers);
-    free(response);
+    uv_write_t *write_req = malloc(sizeof(uv_write_t));
+    uv_buf_t buf = uv_buf_init((char *)response, strlen(response));
 
-    return result;
-}
-
-int http_response_end(uv_stream_t *client)
-{
-    server_conn_t *conn = (server_conn_t *)client->data;
-
-    if (uv_read_stop(client) != 0)
-    {
-        _err("Erro parando leitura do request");
-        uv_close((uv_handle_t *)client, NULL);
-        return -1;
-    }
-
-    http_request_free(conn->req);
-    http_response_free(conn->res);
-
-    uv_close((uv_handle_t *)client, NULL);
+    write_req->data = (uv_stream_t *)client;
+    uv_write(write_req, client, &buf, 1, on_write_end);
 
     return 0;
+}
+
+int http_response_json(const char *str_json_body, uv_stream_t *client)
+{
+    server_conn_t *conn = (server_conn_t *)client->data;
+    http_response_t *res = (http_response_t *)conn->res;
+
+    if (!str_json_body)
+    {
+        str_json_body = "{}";
+    }
+
+    if (!http_headers_get(res->headers, CONTENT_TYPE.key))
+    {
+        http_headers_add(res->headers, CONTENT_TYPE.key, CONTENT_TYPE.value);
+    }
+
+    return http_response_send(str_json_body, client);
 }
 
 void http_response_free(http_response_t *res)

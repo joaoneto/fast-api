@@ -18,6 +18,7 @@ typedef struct
 typedef struct
 {
     server_t *server;
+    uv_timer_t *timeout;
     http_request_t *req;
     http_response_t *res;
 } server_conn_t;
@@ -27,5 +28,7 @@ server_conn_t *server_create_conn();
 int server_listen(server_t *srv, const char *ip, int port);
 
 server_t *server_create(server_cb cb);
+
+void server_conn_free(server_conn_t *conn);
 
 #endif
