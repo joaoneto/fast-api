@@ -55,5 +55,9 @@ void http_request_free(http_request_t *req)
 
     http_headers_free(req->headers);
 
+    free(req->method);
+    free(req->path);
+    free(req->version);
+
     free(req);
 }

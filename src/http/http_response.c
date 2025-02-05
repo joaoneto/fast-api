@@ -28,6 +28,11 @@ http_response_t *http_response_create()
 
 static void on_write_end(uv_write_t *write_req, int status)
 {
+    if (status < 0)
+    {
+        _err("Erro ao escrever: %s", uv_strerror(status));
+    }
+
     _debug("Escreveu a resposta para o client");
 
     uv_stream_t *client = (uv_stream_t *)write_req->data;
@@ -37,10 +42,10 @@ static void on_write_end(uv_write_t *write_req, int status)
     uv_sleep(1);
 
     uv_close((uv_handle_t *)client, NULL);
-    uv_close((uv_handle_t *)conn->timeout, NULL);
+    // uv_close((uv_handle_t *)conn->timeout, NULL);
 
+    free(write_req);
     server_conn_free(conn);
-    free(client);
 }
 
 int http_response_send(const char *str_body, uv_stream_t *client)
@@ -110,6 +115,8 @@ int http_response_send(const char *str_body, uv_stream_t *client)
 
     write_req->data = (uv_stream_t *)client;
     uv_write(write_req, client, &buf, 1, on_write_end);
+
+    free(response);
 
     return 0;
 }

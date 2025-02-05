@@ -87,6 +87,7 @@ static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
         {
             conn->req->total_read += nread;
 
+            // Não funciona, tem vazameto de memória
             if (conn->req->total_read > DEFAULT_MAX_READ_BYTES || conn->req->content_length > DEFAULT_MAX_READ_BYTES)
             {
                 _debug("%zu - %zu - %zu", conn->req->content_length, DEFAULT_MAX_READ_BYTES, conn->req->total_read);
@@ -105,8 +106,6 @@ static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
             if (conn && conn->server->cb)
             {
                 conn->server->cb(conn->req, conn->res, client);
-                free(buf->base);
-                return;
             }
         }
     }
