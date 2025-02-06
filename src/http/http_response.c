@@ -17,7 +17,6 @@ http_response_t *http_response_create()
         return NULL;
     }
 
-    res->sent = 0;
     res->headers = http_headers_create();
     res->status = HTTP_OK;
     res->send = http_response_send;
@@ -26,18 +25,30 @@ http_response_t *http_response_create()
     return res;
 }
 
-void on_shutdown(uv_shutdown_t *req, int status)
+static void on_close(uv_handle_t *client)
+{
+    server_conn_free((server_conn_t *)client->data);
+    free(client);
+}
+
+static void on_shutdown(uv_shutdown_t *req, int status)
 {
     if (status < 0)
     {
         fprintf(stderr, "Erro no shutdown: %s\n", uv_strerror(status));
     }
 
-    // Atrasando para fechar a conexão evitando o "ECONNRESET"
+    // Atrasando para fechar a conexão evitando problemas de liberação de memória
+    // @todo Melhorar o tratamento do fechamento da conexão para evitar EPIPE/ECONNRESET e `corrupted double-linked list`
     uv_sleep(1);
 
-    if (!uv_is_closing((uv_handle_t *)req->data))
-        uv_close((uv_handle_t *)req->data, (uv_close_cb)free);
+    uv_handle_t *client = (uv_handle_t *)req->data;
+
+    if (!uv_is_closing(client))
+    {
+        uv_close(client, on_close);
+    }
+
     free(req);
 }
 
@@ -47,8 +58,6 @@ static void on_write_end(uv_write_t *write_req, int status)
     {
         _err("Erro ao escrever: %s", uv_strerror(status));
     }
-
-    _debug("Escreveu a resposta para o client");
 
     uv_shutdown_t *shutdown_req = (uv_shutdown_t *)malloc(sizeof(uv_shutdown_t));
     if (shutdown_req)
@@ -69,26 +78,29 @@ int http_response_send(const char *str_body, uv_stream_t *client)
     uv_read_stop(client);
     uv_timer_stop((uv_timer_t *)conn->timeout);
 
+    if (!res)
+    {
+        _err("Res não existe para escrever a resposta");
+        return -1;
+    }
+
     // Verifica se existe header Content-Length na request
     if (!http_headers_get(res->headers, CONTENT_LENGTH.key))
     {
         size_t content_length = strlen(str_body);
+
+        // Calcula o tamanho da string que representará o Content-Length
         int len = snprintf(NULL, 0, "%zu", content_length);
         if (len < 0)
         {
-            _debug("Erro ao calcular o tamanho");
-            return 1;
+            _debug("Erro ao calcular o tamanho do %s", CONTENT_LENGTH.key);
+            return -1;
         }
 
-        char *content_length_str = (char *)malloc((len + 1) * sizeof(char)); // +1 para o '\0'
-
-        if (content_length_str != NULL)
-        {
-            // Converte size_t para string
-            snprintf(content_length_str, len + 1, "%zu", content_length);
-            http_headers_add(res->headers, CONTENT_LENGTH.key, content_length_str);
-            free(content_length_str);
-        }
+        // Aloca um buffer de tamanho fixo
+        char content_length_str[32]; // Aloca um buffer de tamanho fixo
+        snprintf(content_length_str, sizeof(content_length_str), "%zu", content_length);
+        http_headers_add(res->headers, CONTENT_LENGTH.key, content_length_str);
     }
 
     char *headers = http_headers_serialize(res->headers);
@@ -105,7 +117,7 @@ int http_response_send(const char *str_body, uv_stream_t *client)
     if (needed_size <= 0)
     {
         _err("Erro ao calcular tamanho da resposta HTTP");
-        return 1;
+        return -1;
     }
 
     // +1 para o '\0'
@@ -114,7 +126,7 @@ int http_response_send(const char *str_body, uv_stream_t *client)
     if (!response)
     {
         _err("Erro ao alocar memória para resposta HTTP");
-        return 1;
+        return -1;
     }
 
     // Preenche o buffer com a resposta formatada
@@ -126,9 +138,8 @@ int http_response_send(const char *str_body, uv_stream_t *client)
     uv_buf_t buf = uv_buf_init((char *)response, strlen(response));
     uv_write(write_req, client, &buf, 1, on_write_end);
 
-    free(response);
+    // free(response);
 
-    server_conn_free(conn);
     return 0;
 }
 

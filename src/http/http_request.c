@@ -23,9 +23,17 @@ http_request_t *http_request_create()
 void http_request_parse_line(http_request_t *req, char *line)
 {
     char *saveptr;
-    req->method = strdup(strtok_r(line, " ", &saveptr));
-    req->path = strdup(strtok_r(NULL, " ", &saveptr));
-    req->version = strdup(strtok_r(NULL, "\r\n", &saveptr));
+
+    // Split a primeira linha diretamente no buffer
+    req->method = strtok_r(line, " ", &saveptr);
+    req->path = strtok_r(NULL, " ", &saveptr);
+    req->version = strtok_r(NULL, "\r\n", &saveptr);
+
+    if (!req->method || !req->path || !req->version)
+    {
+        _err("Falha ao parsear a linha HTTP");
+        return;
+    }
 }
 
 void http_request_parse_headers(http_request_t *req, char *headers)
@@ -53,11 +61,13 @@ void http_request_free(http_request_t *req)
         return;
     }
 
-    http_headers_free(req->headers);
+    // Liberando o campo de headers, apenas se ele não for NULL
+    if (req->headers)
+    {
+        http_headers_free(req->headers);
+    }
 
-    free(req->method);
-    free(req->path);
-    free(req->version);
-
+    // Liberando a estrutura principal
     free(req);
+    req = NULL;
 }

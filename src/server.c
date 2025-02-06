@@ -3,6 +3,7 @@
 #include <uv.h>
 
 #include "applog.h"
+#include "buffer_node.h"
 #include "http/http.h"
 #include "server.h"
 
@@ -12,16 +13,38 @@
 
 static void alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
 {
-    buf->base = malloc(suggested_size);
-    if (!buf->base)
+    server_conn_t *conn = (server_conn_t *)handle->data;
+
+    if (!conn)
     {
-        _err("Falha ao alocar memória para buffer");
+        _err("Falha ao acessar a estrutura da conexão");
+        buf->base = NULL;
         buf->len = 0;
+        return;
     }
-    else
+
+    // Pega um buffer do pool ou aloca novo se necessário
+    conn->buffer = buffer_pool_acquire();
+    if (!conn->buffer)
     {
-        buf->len = suggested_size;
+        conn->buffer = aligned_alloc(16, suggested_size);
+        if (!conn->buffer)
+        {
+            _err("Falha ao alocar buffer");
+            buf->base = NULL;
+            buf->len = 0;
+            return;
+        }
     }
+
+    buf->base = conn->buffer;
+    buf->len = BUFFER_SIZE;
+}
+
+static void on_close(uv_handle_t *client)
+{
+    server_conn_free((server_conn_t *)client->data);
+    free(client);
 }
 
 static void on_timeout(uv_timer_t *timer)
@@ -53,15 +76,17 @@ static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
 
     if (nread > 0)
     {
+        uv_mutex_lock(&conn->lock);
+
         if (!conn->req->header_parsed)
         {
             char *header_end = strstr(buf->base, "\r\n\r\n");
-
             if (header_end)
             {
-                size_t header_len = (header_end - buf->base) + 4;
+                // size_t header_len = (header_end - buf->base) + 4; // \r\n\r\n
 
-                char *headers_str = strndup(buf->base, header_len);
+                // Trabalhando diretamente no buffer para separar a primeira linha
+                char *headers_str = buf->base;
 
                 char *content_length_pos = strcasestr(headers_str, "content-length: ");
                 if (content_length_pos)
@@ -70,13 +95,18 @@ static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
                     conn->req->content_length = strtol(content_length_pos, NULL, 10);
                 }
 
-                char *first_line = strtok(headers_str, "\r\n");
-                char *first_line_copy = strdup(first_line);
-                http_request_parse_line(conn->req, first_line_copy);
-                free(first_line_copy);
-                http_request_parse_headers(conn->req, headers_str + strlen(first_line) + 2);
+                // Encontrando o fim da primeira linha
+                char *first_line_end = strstr(headers_str, "\r\n");
+                if (first_line_end)
+                {
+                    *first_line_end = '\0'; // Finaliza a primeira linha
 
-                free(headers_str);
+                    // Parse a primeira linha do HTTP diretamente
+                    http_request_parse_line(conn->req, headers_str);
+
+                    // Parse os headers restantes, começando após a primeira linha
+                    http_request_parse_headers(conn->req, first_line_end + 2);
+                }
 
                 conn->req->header_parsed = 1;
             }
@@ -92,7 +122,8 @@ static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
 
             conn->res->status = HTTP_PAYLOAD_TOO_LARGE;
             conn->res->json("{ \"message\": \"Requisição excedeu o limite de 2MB, encerrando conexão\" }", client);
-            free(buf->base);
+
+            uv_mutex_unlock(&conn->lock);
             return;
         }
 
@@ -100,6 +131,8 @@ static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
         {
             conn->server->cb(conn->req, conn->res, client);
         }
+
+        uv_mutex_unlock(&conn->lock);
     }
     else if (nread < 0)
     {
@@ -112,12 +145,8 @@ static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
             _err("Erro: %s", uv_strerror(nread));
         }
 
-        server_conn_free(conn);
-
-        uv_close((uv_handle_t *)client, NULL);
+        uv_close((uv_handle_t *)client, on_close);
     }
-
-    free(buf->base);
 }
 
 static void on_new_connection(uv_stream_t *stream, int status)
@@ -143,17 +172,17 @@ static void on_new_connection(uv_stream_t *stream, int status)
         _err("Falha ao alocar memória para conexão");
         return;
     }
-    conn->req = NULL;
-    conn->res = NULL;
-    conn->server = NULL;
 
     uv_tcp_init(server->loop, client);
 
     if (uv_accept(stream, (uv_stream_t *)client) == 0)
     {
+
         conn->req = http_request_create();
         conn->res = http_response_create();
+        uv_mutex_init(&conn->lock);
         conn->server = server;
+        conn->buffer = NULL;
 
         if (!conn->req || !conn->res)
         {
@@ -222,13 +251,26 @@ void server_conn_free(server_conn_t *conn)
         return;
     }
 
+    uv_mutex_lock(&conn->lock);
+
     http_request_free(conn->req);
     http_response_free(conn->res);
 
     if (conn->timeout)
     {
         free(conn->timeout);
+        conn->timeout = NULL;
     }
 
+    if (conn->buffer)
+    {
+        buffer_pool_release(conn->buffer);
+        conn->buffer = NULL;
+    }
+
+    uv_mutex_unlock(&conn->lock);
+    uv_mutex_destroy(&conn->lock);
+
     free(conn);
+    conn = NULL;
 }

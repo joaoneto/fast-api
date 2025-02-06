@@ -21,6 +21,8 @@ typedef struct
     uv_timer_t *timeout;
     http_request_t *req;
     http_response_t *res;
+    uv_mutex_t lock;
+    char *buffer;
 } server_conn_t;
 
 server_conn_t *server_create_conn();
