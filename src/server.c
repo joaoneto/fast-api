@@ -42,15 +42,12 @@ static void on_timeout(uv_timer_t *timer)
 static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
 {
     server_conn_t *conn = (server_conn_t *)client->data;
+    conn->req->total_read += nread;
 
     if (!conn->req || !conn->res)
     {
         _err("Conexão não inicializado com Req ou Res");
-        if (buf->base)
-        {
-            free(buf->base);
-        }
-
+        free(buf->base);
         return;
     }
 
@@ -59,10 +56,19 @@ static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
         if (!conn->req->header_parsed)
         {
             char *header_end = strstr(buf->base, "\r\n\r\n");
+
             if (header_end)
             {
                 size_t header_len = (header_end - buf->base) + 4;
+
                 char *headers_str = strndup(buf->base, header_len);
+
+                char *content_length_pos = strcasestr(headers_str, "content-length: ");
+                if (content_length_pos)
+                {
+                    content_length_pos += 16;
+                    conn->req->content_length = strtol(content_length_pos, NULL, 10);
+                }
 
                 char *first_line = strtok(headers_str, "\r\n");
                 char *first_line_copy = strdup(first_line);
@@ -72,41 +78,27 @@ static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
 
                 free(headers_str);
 
-                char *content_length_pos = strcasestr(buf->base, "content-length: ");
-                if (content_length_pos)
-                {
-                    content_length_pos += 16;
-                    conn->req->content_length = strtol(content_length_pos, NULL, 10);
-                }
-
                 conn->req->header_parsed = 1;
             }
         }
 
-        if (conn->req->header_parsed)
+        _debug("> Quantidade lida: %zu", conn->req->total_read);
+        _debug("> Tamanho do payload: %zu", conn->req->content_length);
+
+        // Não funciona, tem vazameto de memória
+        if (conn->req->total_read > DEFAULT_MAX_READ_BYTES || conn->req->content_length > DEFAULT_MAX_READ_BYTES)
         {
-            conn->req->total_read += nread;
+            _err("Requisição excedeu o limite de 2MB, encerrando conexão");
 
-            // Não funciona, tem vazameto de memória
-            if (conn->req->total_read > DEFAULT_MAX_READ_BYTES || conn->req->content_length > DEFAULT_MAX_READ_BYTES)
-            {
-                _debug("%zu - %zu - %zu", conn->req->content_length, DEFAULT_MAX_READ_BYTES, conn->req->total_read);
-                _err("Requisição excedeu o limite de 2MB, encerrando conexão");
+            conn->res->status = HTTP_PAYLOAD_TOO_LARGE;
+            conn->res->json("{ \"message\": \"Requisição excedeu o limite de 2MB, encerrando conexão\" }", client);
+            free(buf->base);
+            return;
+        }
 
-                uv_read_stop(client);
-                uv_timer_stop((uv_timer_t *)conn->timeout);
-
-                conn->res->status = HTTP_PAYLOAD_TOO_LARGE;
-                conn->res->json("{ \"message\": \"Requisição excedeu o limite de 2MB, encerrando conexão\" }", client);
-
-                free(buf->base);
-                return;
-            }
-
-            if (conn && conn->server->cb)
-            {
-                conn->server->cb(conn->req, conn->res, client);
-            }
+        if (conn && conn->server->cb)
+        {
+            conn->server->cb(conn->req, conn->res, client);
         }
     }
     else if (nread < 0)
@@ -125,10 +117,7 @@ static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
         uv_close((uv_handle_t *)client, NULL);
     }
 
-    if (buf->base)
-    {
-        free(buf->base);
-    }
+    free(buf->base);
 }
 
 static void on_new_connection(uv_stream_t *stream, int status)

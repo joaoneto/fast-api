@@ -26,6 +26,21 @@ http_response_t *http_response_create()
     return res;
 }
 
+void on_shutdown(uv_shutdown_t *req, int status)
+{
+    if (status < 0)
+    {
+        fprintf(stderr, "Erro no shutdown: %s\n", uv_strerror(status));
+    }
+
+    // Atrasando para fechar a conexão evitando o "ECONNRESET"
+    uv_sleep(1);
+
+    if (!uv_is_closing((uv_handle_t *)req->data))
+        uv_close((uv_handle_t *)req->data, (uv_close_cb)free);
+    free(req);
+}
+
 static void on_write_end(uv_write_t *write_req, int status)
 {
     if (status < 0)
@@ -35,17 +50,14 @@ static void on_write_end(uv_write_t *write_req, int status)
 
     _debug("Escreveu a resposta para o client");
 
-    uv_stream_t *client = (uv_stream_t *)write_req->data;
-    server_conn_t *conn = (server_conn_t *)client->data;
-
-    // Atrasando para fechar a conexão evitando o "ECONNRESET"
-    uv_sleep(1);
-
-    uv_close((uv_handle_t *)client, NULL);
-    // uv_close((uv_handle_t *)conn->timeout, NULL);
+    uv_shutdown_t *shutdown_req = (uv_shutdown_t *)malloc(sizeof(uv_shutdown_t));
+    if (shutdown_req)
+    {
+        shutdown_req->data = write_req->handle;
+        uv_shutdown(shutdown_req, write_req->handle, on_shutdown);
+    }
 
     free(write_req);
-    server_conn_free(conn);
 }
 
 int http_response_send(const char *str_body, uv_stream_t *client)
@@ -112,12 +124,11 @@ int http_response_send(const char *str_body, uv_stream_t *client)
 
     uv_write_t *write_req = malloc(sizeof(uv_write_t));
     uv_buf_t buf = uv_buf_init((char *)response, strlen(response));
-
-    write_req->data = (uv_stream_t *)client;
     uv_write(write_req, client, &buf, 1, on_write_end);
 
     free(response);
 
+    server_conn_free(conn);
     return 0;
 }
 
