@@ -12,20 +12,19 @@ http_request_t *http_request_create()
         return NULL;
     }
 
-    req->headers = http_headers_create();
-    req->total_read = 0;
+    req->bytes_received = 0;
     req->content_length = 0;
     req->header_parsed = 0;
 
     return req;
 }
 
-void http_request_parse_line(http_request_t *req, char *line)
+void http_request_parse_line(http_request_t *req, const uv_buf_t *buffer)
 {
     char *saveptr;
 
     // Split a primeira linha diretamente no buffer
-    req->method = strtok_r(line, " ", &saveptr);
+    req->method = strtok_r(buffer->base, " ", &saveptr);
     req->path = strtok_r(NULL, " ", &saveptr);
     req->version = strtok_r(NULL, "\r\n", &saveptr);
 
@@ -36,38 +35,36 @@ void http_request_parse_line(http_request_t *req, char *line)
     }
 }
 
-void http_request_parse_headers(http_request_t *req, char *headers)
+void http_request_parse_headers(http_request_t *req, const uv_buf_t *buffer)
 {
-    char *line = strtok(headers, "\r\n");
+    char *header_end = strstr(buffer->base, "\r\n\r\n");
 
-    while (line)
+    if (header_end)
     {
-        char *sep = strchr(line, ':');
-        if (sep)
+        size_t header_len = (header_end - buffer->base) + 4;
+
+        req->content_length = 0;
+
+        req->headers = (char *)malloc(header_len + 1);
+        if (req->headers)
         {
-            *sep = '\0';
-            char *key = line;
-            char *value = sep + 2;
-            http_headers_add(req->headers, key, value);
+            strncpy(req->headers, buffer->base, header_len);
+            req->headers[header_len] = '\0';
         }
-        line = strtok(NULL, "\r\n");
+
+        char *content_length_pos = strcasestr(buffer->base, "content-length: ");
+        if (content_length_pos)
+        {
+            content_length_pos += 16;
+            req->content_length = strtol(content_length_pos, NULL, 10);
+        }
+
+        req->header_parsed = 1;
     }
 }
 
 void http_request_free(http_request_t *req)
 {
-    if (!req)
-    {
-        return;
-    }
-
-    // Liberando o campo de headers, apenas se ele não for NULL
-    if (req->headers)
-    {
-        http_headers_free(req->headers);
-    }
-
-    // Liberando a estrutura principal
+    free(req->headers);
     free(req);
-    req = NULL;
 }

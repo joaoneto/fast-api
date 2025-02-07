@@ -10,11 +10,10 @@ typedef void (*server_cb)(http_request_t *req, http_response_t *res, uv_stream_t
 
 typedef struct
 {
-    uv_tcp_t socket;
+    uv_tcp_t handle;
     uv_loop_t *loop;
     server_cb cb;
 } server_t;
-
 typedef struct
 {
     server_t *server;
@@ -22,7 +21,7 @@ typedef struct
     http_request_t *req;
     http_response_t *res;
     uv_mutex_t lock;
-    char *buffer;
+    uv_buf_t buffer;
 } server_conn_t;
 
 server_conn_t *server_create_conn();

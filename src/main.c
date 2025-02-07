@@ -12,25 +12,21 @@
 
 void on_request(http_request_t *req, http_response_t *res, uv_stream_t *client)
 {
-    if (req->total_read >= req->content_length)
+    if (req->bytes_received >= req->content_length)
     {
         _info("Corpo da requisição completamente lido");
 
-        char *headers_str = http_headers_serialize(req->headers);
-        _debug("Headers\n%s", headers_str);
-        free(headers_str);
+        _debug("Headers\n%s", req->headers);
 
         _debug("REQ Method: %s", req->method);
         _debug("REQ Path: %s", req->path);
         _debug("REQ Version: %s", req->version);
 
         _debug("Content length: %d", req->content_length);
-        _debug("Total Read: %d", req->total_read);
-
-        http_headers_add(res->headers, "X-ok", "true");
+        _debug("Total Read: %d", req->bytes_received);
 
         res->status = HTTP_NOT_FOUND;
-        res->json("{ \"message\": \"Hello world!\" }", client);
+        res->send("{ \"message\": \"Hello world!\" }", "content-type: application/json\r\n", client);
 
         // res->status = HTTP_GATEWAY_TIMEOUT;
         // res->status = HTTP_REQUEST_TIMEOUT;
