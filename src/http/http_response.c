@@ -5,6 +5,8 @@
 #include "http/http.h"
 #include "server.h"
 
+#define DEFAULT_SHUTDOWN_TIMEOUT_MS 300
+
 http_response_t *http_response_create()
 {
     http_response_t *res = (http_response_t *)malloc(sizeof(http_response_t));
@@ -42,7 +44,7 @@ static void on_shutdown(uv_shutdown_t *shutdown_req, int status)
     uv_timer_t *timer = (uv_timer_t *)malloc(sizeof(uv_timer_t));
     uv_timer_init(shutdown_req->handle->loop, timer);
     timer->data = shutdown_req->handle;
-    uv_timer_start(timer, on_timer_close, 200, 0);
+    uv_timer_start(timer, on_timer_close, DEFAULT_SHUTDOWN_TIMEOUT_MS, 0);
 
     free(shutdown_req);
 }
@@ -109,6 +111,5 @@ int http_response_send(const char *str_body, const char *headers, uv_stream_t *c
 
 void http_response_free(http_response_t *res)
 {
-    free(res->headers);
     free(res);
 }
