@@ -5,7 +5,8 @@
 #include "http/http.h"
 #include "server.h"
 
-#define DEFAULT_SHUTDOWN_TIMEOUT_MS 300
+#define DEFAULT_SHUTDOWN_TIMEOUT_MS 100
+#define DEFAULT_HEADERS_BYTES 128
 
 http_response_t *http_response_create()
 {
@@ -15,6 +16,14 @@ http_response_t *http_response_create()
         _err("Erro ao alocar memória para response");
         return NULL;
     }
+
+    res->headers = (char *)malloc(DEFAULT_HEADERS_BYTES);
+    if (!res->headers)
+    {
+        free(res);
+        return NULL;
+    }
+    res->headers[0] = '\0';
 
     res->status = HTTP_OK;
     res->send = http_response_send;
@@ -63,11 +72,12 @@ static void on_write_end(uv_write_t *write_req, int status)
     free(write_req);
 }
 
-int http_response_send(const char *str_body, const char *headers, uv_stream_t *client)
+int http_response_send(const char *str_body, uv_stream_t *client)
 {
     server_conn_t *conn = (server_conn_t *)client->data;
     http_response_t *res = (http_response_t *)conn->res;
     http_status_code_t status = res->status;
+    char *headers = res->headers;
 
     uv_read_stop(client);
 
@@ -106,10 +116,41 @@ int http_response_send(const char *str_body, const char *headers, uv_stream_t *c
     uv_buf_t buf = uv_buf_init((char *)response, strlen(response));
     uv_write(write_req, client, &buf, 1, on_write_end);
 
+    free(response);
+
     return 0;
+}
+
+void http_response_set_header(http_response_t *res, const char *key, const char *value)
+{
+    if (!res || !res->headers)
+        return;
+
+    size_t current_len = strlen(res->headers);
+    size_t key_len = strlen(key);
+    size_t value_len = strlen(value);
+    size_t required_size = current_len + key_len + value_len + 4; // ": " + "\r\n"
+
+    // Expande se necessário
+    if (required_size >= DEFAULT_HEADERS_BYTES)
+    {
+        char *new_headers = (char *)realloc(res->headers, required_size + DEFAULT_HEADERS_BYTES);
+        if (!new_headers)
+            return;
+        res->headers = new_headers;
+    }
+
+    // Adiciona o cabeçalho
+    strcat(res->headers, key);
+    strcat(res->headers, ": ");
+    strcat(res->headers, value);
+    strcat(res->headers, "\r\n");
 }
 
 void http_response_free(http_response_t *res)
 {
+    if (!res)
+        return;
+    free(res->headers);
     free(res);
 }

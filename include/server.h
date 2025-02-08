@@ -17,10 +17,10 @@ typedef struct
 typedef struct
 {
     server_t *server;
-    uv_timer_t *timeout;
+    // uv_timer_t *timeout;
     http_request_t *req;
     http_response_t *res;
-    uv_mutex_t lock;
+    // uv_mutex_t lock;
     uv_buf_t buffer;
 } server_conn_t;
 

@@ -45,9 +45,10 @@ void http_request_parse_headers(http_request_t *req, const uv_buf_t *buffer)
     req->method = strdup(strtok_r(first_line_copy, " ", &saveptr));
     req->path = strdup(strtok_r(NULL, " ", &saveptr));
     req->version = strdup(strtok_r(NULL, "\r\n", &saveptr));
-    free(first_line_copy);
 
-    req->headers = headers_str + strlen(first_line) + 2;
+    req->headers = strdup(headers_str + strlen(first_line) + 2);
+
+    free(first_line_copy);
     free(headers_str);
 
     req->header_parsed = 1;
@@ -55,5 +56,11 @@ void http_request_parse_headers(http_request_t *req, const uv_buf_t *buffer)
 
 void http_request_free(http_request_t *req)
 {
+    if (!req)
+        return;
+    free(req->method);
+    free(req->path);
+    free(req->version);
+    free(req->headers);
     free(req);
 }

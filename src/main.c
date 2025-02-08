@@ -26,7 +26,10 @@ void on_request(http_request_t *req, http_response_t *res, uv_stream_t *client)
         _debug("Total Read: %d", req->bytes_received);
 
         res->status = HTTP_NOT_FOUND;
-        res->send("{ \"message\": \"Hello world!\" }", "content-type: application/json\r\n", client);
+
+        http_response_set_header(res, "content-type", "application/json");
+        http_response_set_header(res, "X-ok", "1");
+        res->send("{ \"message\": \"Hello world!\" }", client);
 
         // res->status = HTTP_GATEWAY_TIMEOUT;
         // res->status = HTTP_REQUEST_TIMEOUT;

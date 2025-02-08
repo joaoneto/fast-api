@@ -32,7 +32,6 @@ static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
     if (!conn->req || !conn->res)
     {
         _err("Conexão não inicializado com Req ou Res");
-        free(buf->base);
         return;
     }
 
@@ -43,12 +42,10 @@ static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
 
             http_request_parse_headers(conn->req, &conn->buffer);
         }
-        else
+
+        if (conn && conn->server->cb)
         {
-            if (conn && conn->server->cb)
-            {
-                conn->server->cb(conn->req, conn->res, client);
-            }
+            conn->server->cb(conn->req, conn->res, client);
         }
     }
     else if (nread < 0)
@@ -145,8 +142,8 @@ int server_listen(server_t *server, const char *ip, int port)
 
 void server_conn_free(server_conn_t *conn)
 {
-    http_request_free(conn->req);
     http_response_free(conn->res);
+    http_request_free(conn->req);
     free(conn->buffer.base);
     free(conn);
 }
