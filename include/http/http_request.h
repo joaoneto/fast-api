@@ -17,8 +17,6 @@ typedef struct
 
 http_request_t *http_request_create();
 
-void http_request_parse_line(http_request_t *req, const uv_buf_t *buffer);
-
 void http_request_parse_headers(http_request_t *req, const uv_buf_t *buffer);
 
 void http_request_free(http_request_t *req);
