@@ -40,13 +40,15 @@ static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
     {
         if (!conn->req->header_parsed)
         {
-            http_request_parse_line(conn->req, &conn->buffer);
+
             http_request_parse_headers(conn->req, &conn->buffer);
         }
-
-        if (conn && conn->server->cb)
+        else
         {
-            conn->server->cb(conn->req, conn->res, client);
+            if (conn && conn->server->cb)
+            {
+                conn->server->cb(conn->req, conn->res, client);
+            }
         }
     }
     else if (nread < 0)
