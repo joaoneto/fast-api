@@ -13,6 +13,9 @@ typedef struct
     uv_tcp_t handle;
     uv_loop_t *loop;
     server_cb cb;
+    int shutting_down;
+    uv_signal_t sigint;
+    uv_signal_t sigterm;
 } server_t;
 typedef struct
 {

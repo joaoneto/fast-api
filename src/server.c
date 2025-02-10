@@ -27,7 +27,7 @@ static void on_walk(uv_handle_t *handle, void *arg)
 {
     if (!uv_is_closing(handle))
     {
-        uv_close(handle, on_close);
+        uv_close(handle, NULL);
     }
 }
 
@@ -130,6 +130,12 @@ static void on_new_connection(uv_stream_t *stream, int status)
     }
 }
 
+static void on_shutdown_signal(uv_signal_t *handle, int signum)
+{
+    server_t *server = (server_t *)handle->data;
+    server_shutdown(server);
+}
+
 server_t *server_create(uv_loop_t *loop, server_cb cb)
 {
     server_t *server = malloc(sizeof(server_t));
@@ -137,6 +143,14 @@ server_t *server_create(uv_loop_t *loop, server_cb cb)
     server->loop = loop;
     server->cb = cb;
     server->handle.data = server;
+
+    server->sigint.data = server;
+    uv_signal_init(server->loop, &server->sigint);
+    uv_signal_start(&server->sigint, on_shutdown_signal, SIGINT);
+
+    server->sigterm.data = server;
+    uv_signal_init(server->loop, &server->sigterm);
+    uv_signal_start(&server->sigterm, on_shutdown_signal, SIGTERM);
 
     uv_tcp_init(server->loop, &server->handle);
 
@@ -148,22 +162,34 @@ int server_listen(server_t *server, const char *ip, int port)
     struct sockaddr_in addr;
 
     uv_ip4_addr(ip, port, &addr);
-    uv_tcp_bind(&server->handle, (const struct sockaddr *)&addr, 0);
+    int result = uv_tcp_bind(&server->handle, (const struct sockaddr *)&addr, 0);
+    if (result != 0)
+    {
+        _err("Erro ao vincular a porta %d: %s", port, uv_strerror(result));
+        return -1;
+    }
 
-    uv_listen((uv_stream_t *)&server->handle, DEFAULT_BACKLOG, on_new_connection);
+    result = uv_listen((uv_stream_t *)&server->handle, DEFAULT_BACKLOG, on_new_connection);
+    if (result != 0)
+    {
+        _err("Porta %d já está em uso", port);
+        return -1;
+    }
 
     return uv_run(server->loop, UV_RUN_DEFAULT);
 }
 
 void server_shutdown(server_t *server)
 {
+    _info("Encerrando o servidor...");
+
     if (!server || !server->loop)
     {
-        fprintf(stderr, "Erro: Servidor ou loop inválido.\n");
+        _err("Erro: Servidor ou loop inválido");
         return;
     }
 
-    printf("Encerrando o servidor...\n");
+    server->shutting_down = 1;
 
     // Fecha todas as conexões e handles registrados no loop
     uv_stop(server->loop);
@@ -174,9 +200,8 @@ void server_shutdown(server_t *server)
 
     // Libera o loop (se ele não foi alocado estaticamente)
     uv_loop_close(server->loop);
-    free(server->loop);
 
-    printf("Servidor encerrado com sucesso.\n");
+    _info("Servidor encerrado com sucesso");
 }
 
 void server_conn_free(server_conn_t *conn)

@@ -42,16 +42,12 @@ int main()
     server_t *server = server_create(loop, on_request);
 
     int result = server_listen(server, "0.0.0.0", DEFAULT_PORT);
-
     if (result != 0)
     {
-        _err("Erro: %d", result);
-
-        server_shutdown(server);
-
-        free(loop);
-        free(server);
+        _err("Erro ao iniciar servidor: %s", uv_strerror(result));
     }
+
+    free(server);
 
     return result;
 }
