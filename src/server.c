@@ -13,8 +13,7 @@
 
 static void alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
 {
-    server_conn_t *conn = (server_conn_t *)handle->data;
-    buf->base = conn->buffer.base;
+    buf->base = (char *)malloc(DEFAULT_BUFFER_SIZE);
     buf->len = DEFAULT_BUFFER_SIZE;
 }
 
@@ -24,23 +23,25 @@ static void on_close(uv_handle_t *client)
     free(client);
 }
 
+static void on_walk(uv_handle_t *handle, void *arg)
+{
+    if (!uv_is_closing(handle))
+    {
+        uv_close(handle, on_close);
+    }
+}
+
 static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
 {
     server_conn_t *conn = (server_conn_t *)client->data;
     conn->req->bytes_received += nread;
-
-    if (!conn->req || !conn->res)
-    {
-        _err("Conexão não inicializado com Req ou Res");
-        return;
-    }
 
     if (nread > 0)
     {
         if (!conn->req->header_parsed)
         {
 
-            http_request_parse_headers(conn->req, &conn->buffer);
+            http_request_parse_headers(conn->req, buf);
         }
 
         if (conn && conn->server->cb)
@@ -61,6 +62,8 @@ static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
 
         uv_close((uv_handle_t *)client, on_close);
     }
+
+    free(buf->base);
 }
 
 static void on_new_connection(uv_stream_t *stream, int status)
@@ -73,14 +76,14 @@ static void on_new_connection(uv_stream_t *stream, int status)
 
     server_t *server = (server_t *)stream->data;
 
-    uv_tcp_t *client = malloc(sizeof(uv_tcp_t));
+    uv_tcp_t *client = (uv_tcp_t *)malloc(sizeof(uv_tcp_t));
     if (!client)
     {
         fprintf(stderr, "Falha ao alocar memória para cliente");
         return;
     }
 
-    server_conn_t *conn = malloc(sizeof(server_conn_t));
+    server_conn_t *conn = (server_conn_t *)malloc(sizeof(server_conn_t));
     if (!conn)
     {
         fprintf(stderr, "Falha ao alocar memória para conexão");
@@ -88,38 +91,50 @@ static void on_new_connection(uv_stream_t *stream, int status)
     }
 
     conn->server = server;
-    conn->buffer.base = (char *)malloc(DEFAULT_BUFFER_SIZE);
-    conn->buffer.len = DEFAULT_BUFFER_SIZE;
-    conn->req = http_request_create();
-    conn->res = http_response_create();
 
-    client->data = conn;
+    int init_err = uv_tcp_init(server->loop, client);
+    if (init_err < 0)
+    {
+        _err("Erro ao inicializar cliente TCP: %s", uv_strerror(init_err));
+        server_conn_free(conn);
+        free(client);
+        return;
+    }
 
-    uv_tcp_init(server->loop, client);
-    // uv_mutex_init(&conn->lock);
+    if (!uv_is_active((uv_handle_t *)&server->handle))
+    {
+        _err("Tentativa de aceitar conexão em um socket inativo");
+        return;
+    }
 
     if (uv_accept((uv_stream_t *)&server->handle, (uv_stream_t *)client) == 0)
     {
-        uv_read_start((uv_stream_t *)client, alloc_buffer, on_read);
+        conn->req = http_request_create();
+        conn->res = http_response_create();
+
+        client->data = conn;
+
+        int r = uv_read_start((uv_stream_t *)client, alloc_buffer, on_read);
+        if (r != 0)
+        {
+            _err("Erro ao aceitar cliente: %s", r);
+            server_conn_free(conn);
+            uv_close((uv_handle_t *)client, on_close);
+            return;
+        }
     }
     else
     {
-        fprintf(stderr, "Erro ao aceitar cliente, fechando conexão!\n");
+        _err("Erro ao aceitar cliente, fechando conexão");
         uv_close((uv_handle_t *)client, on_close);
     }
 }
 
-server_t *server_create(server_cb cb)
+server_t *server_create(uv_loop_t *loop, server_cb cb)
 {
-    server_t *server = malloc(sizeof(*server));
+    server_t *server = malloc(sizeof(server_t));
 
-    if (!server)
-    {
-        _err("Erro ao alocar servidor");
-        return NULL;
-    }
-
-    server->loop = uv_default_loop();
+    server->loop = loop;
     server->cb = cb;
     server->handle.data = server;
 
@@ -140,10 +155,34 @@ int server_listen(server_t *server, const char *ip, int port)
     return uv_run(server->loop, UV_RUN_DEFAULT);
 }
 
+void server_shutdown(server_t *server)
+{
+    if (!server || !server->loop)
+    {
+        fprintf(stderr, "Erro: Servidor ou loop inválido.\n");
+        return;
+    }
+
+    printf("Encerrando o servidor...\n");
+
+    // Fecha todas as conexões e handles registrados no loop
+    uv_stop(server->loop);
+    uv_walk(server->loop, on_walk, NULL);
+
+    // Aguarda o loop processar os fechamentos
+    uv_run(server->loop, UV_RUN_DEFAULT);
+
+    // Libera o loop (se ele não foi alocado estaticamente)
+    uv_loop_close(server->loop);
+    free(server->loop);
+
+    printf("Servidor encerrado com sucesso.\n");
+}
+
 void server_conn_free(server_conn_t *conn)
 {
     http_response_free(conn->res);
     http_request_free(conn->req);
-    free(conn->buffer.base);
     free(conn);
+    conn = NULL;
 }

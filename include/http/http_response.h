@@ -16,14 +16,21 @@ typedef struct
 {
     char *headers;
     http_status_code_t status;
-    int (*send)(const char *str_body, uv_stream_t *client);
+    int (*header)(uv_stream_t *client, const char *key, const char *value);
+    int (*send)(uv_stream_t *client, const char *str_body);
 } http_response_t;
+
+typedef struct
+{
+    uv_write_t req;
+    char *response;
+} http_response_write_req_t;
 
 http_response_t *http_response_create();
 
-int http_response_send(const char *str_body, uv_stream_t *client);
+int http_response_set_header(uv_stream_t *client, const char *key, const char *value);
 
-void http_response_set_header(http_response_t *res, const char *key, const char *value);
+int http_response_send(uv_stream_t *client, const char *str_body);
 
 void http_response_free(http_response_t *res);
 

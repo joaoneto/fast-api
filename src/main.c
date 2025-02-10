@@ -8,7 +8,6 @@
 #include "server.h"
 
 #define DEFAULT_PORT 3000
-#define DEFAULT_BACKLOG 128
 
 void on_request(http_request_t *req, http_response_t *res, uv_stream_t *client)
 {
@@ -25,21 +24,34 @@ void on_request(http_request_t *req, http_response_t *res, uv_stream_t *client)
         _debug("Content length: %d", req->content_length);
         _debug("Total Read: %d", req->bytes_received);
 
-        res->status = HTTP_NOT_FOUND;
+        res->status = HTTP_OK;
+        res->header(client, "content-type", "application/json");
+        res->send(client, "{ \"message\": \"Hello World!\" }");
 
-        http_response_set_header(res, "content-type", "application/json");
-        http_response_set_header(res, "X-ok", "1");
-        res->send("{ \"message\": \"Hello world!\" }", client);
+        // http_response_set_header(client, "content-type", "application/json");
+        // http_response_set_header(client, "connection", "close");
 
-        // res->status = HTTP_GATEWAY_TIMEOUT;
-        // res->status = HTTP_REQUEST_TIMEOUT;
-        // res->send("Atingiu o tempo limite da requisição!", client);
+        // http_response_send(client, "{ \"message\": \"Hello World!\" }");
     }
 }
 
 int main()
 {
-    server_t *server = server_create(on_request);
+    uv_loop_t *loop = uv_default_loop();
 
-    return server_listen(server, "0.0.0.0", DEFAULT_PORT);
+    server_t *server = server_create(loop, on_request);
+
+    int result = server_listen(server, "0.0.0.0", DEFAULT_PORT);
+
+    if (result != 0)
+    {
+        _err("Erro: %d", result);
+
+        server_shutdown(server);
+
+        free(loop);
+        free(server);
+    }
+
+    return result;
 }
